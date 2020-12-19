@@ -1,9 +1,10 @@
 import Typed from "react-typed";
+import Link from "next/link";
 import styles from "../styles/Home.module.css";
 
-function Link(props) {
+function ExternalLink(props) {
   return (
-    <a className={styles.link} href={props.url} target="_blank">
+    <a href={props.url} target="_blank">
       {props.text}
     </a>
   );
@@ -25,10 +26,15 @@ export default function Home() {
         </h2>
       </div>
       <div>
-        <Link url="#" text="Blog" />
-        <Link url="https://www.github.com/notakay" text="GitHub" />
-        <Link url="https://www.twitter.com/notakay_" text="Twitter" />
-        <Link url="https://www.linkedin.com/in/aungkhantko" text="LinkedIn" />
+        <Link href="/blog">
+          <a>Blog</a>
+        </Link>
+        <ExternalLink url="https://www.github.com/notakay" text="GitHub" />
+        <ExternalLink url="https://www.twitter.com/notakay_" text="Twitter" />
+        <ExternalLink
+          url="https://www.linkedin.com/in/aungkhantko"
+          text="LinkedIn"
+        />
       </div>
     </div>
   );
