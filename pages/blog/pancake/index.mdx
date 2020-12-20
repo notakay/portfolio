@@ -13,9 +13,12 @@ import styles from "../../../styles/post.module.css";
 ###### August 1, 2020
 
 **Description**
+
 Pancake is a simple binary exploitation challenge from HacktivityCon CTF.
 Entering a long string causes a buffer overflow and pancake segfaults. Some familiarity with radare2 and the call stack will be helpful going through this writeup. A great guide on radare2 can be found [here](https://www.megabeets.net/a-journey-into-radare-2-part-1/).
+
 **Analysis**
+
 Load and analyze the binary in radare2. The stack is not executable, but the file isn't protected by [canaries](https://en.wikipedia.org/wiki/Buffer_overflow_protection#Canaries) nor compiled with support for [position independent code](https://en.wikipedia.org/wiki/Position-independent_code). This means that there is no protection against buffer overflows and the segments will always be loaded to the same location.
 
 <div className={styles.codeblock}>
