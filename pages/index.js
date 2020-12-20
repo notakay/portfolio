@@ -4,7 +4,7 @@ import styles from "../styles/Home.module.css";
 
 function ExternalLink(props) {
   return (
-    <a href={props.url} target="_blank">
+    <a className={styles.link} href={props.url} target="_blank">
       {props.text}
     </a>
   );
@@ -27,7 +27,7 @@ export default function Home() {
       </div>
       <div>
         <Link href="/blog">
-          <a>Blog</a>
+          <a className={styles.link}>Blog</a>
         </Link>
         <ExternalLink url="https://www.github.com/notakay" text="GitHub" />
         <ExternalLink url="https://www.twitter.com/notakay_" text="Twitter" />

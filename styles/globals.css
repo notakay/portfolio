@@ -11,6 +11,4 @@ a:visited,
 a:hover,
 a:active {
   color: inherit;
-  font-size: 1.5rem;
-  margin: 0.25rem;
 }
